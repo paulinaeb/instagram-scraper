@@ -45,17 +45,28 @@ def get_scraped_profiles():
 
 @flask_app.route('/scrape-info', methods=['GET'])
 def get_scrape_info():
+    users = mongo.db.user_engagement
+    page_size = int(request.args.get('pageSize', 20))
+    page = int(request.args.get('page', 1))
+    sort_by = request.args.get('sortBy', None)
+    sort_order = request.args.get('order', None)
     user_id = request.args.get('userId')
-    # el datetime de python esta en segundos y el de mongo en ms, por eso la division
     timestamp = int(request.args.get('timestamp')) / 1000.0
-    parsed_date = datetime.utcfromtimestamp(timestamp)
 
-    # Buscar todos los user_engagements de ese scrape por el datetime y usuario
-    start_time = time.time()
-    engagements = mongo.db.user_engagement.find({'profile_id': user_id, 'date': parsed_date}).limit(250)
-    # engagements = mongo.db.user_engagement.find({'profile_id': user_id, 'date': parsed_date}).sort('like_percent', -1)
-    response = parse(list(engagements))
-    print(f'EL QUERY TARDO {time.time() - start_time} SEGUNDOS')
+    parsed_date = datetime.utcfromtimestamp(timestamp)
+    offset = (page-1) * page_size
+
+    query = {'profile_id': user_id, 'date': parsed_date}
+    total = users.count_documents(query)
+
+    if sort_by and sort_order:
+        engagements = users.find(query).sort(sort_by, int(sort_order)).skip(offset).limit(page_size)
+    else:
+        engagements = users.find(query).skip(offset).limit(page_size)
+
+    xd = {'rows': list(engagements), 'count': total}
+    response = parse(xd)
+
     return Response(response, mimetype='application/json')
 
 
