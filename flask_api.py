@@ -37,9 +37,17 @@ def not_found(error=None):
 
 @flask_app.route('/scraped-profiles', methods=['GET'])
 def get_scraped_profiles():
-    users = mongo.db.scraped_profiles.find({}).sort('_id', -1)
-    response = parse(users)
-    return Response(response, mimetype='application/json')
+    collection = mongo.db.scraped_profiles
+    page = int(request.args.get('page', 1))
+    page_size = int(request.args.get('pageSize', 20))
+    offset = (page-1) * page_size
+
+    total = collection.count_documents({})
+    users = collection.find({}).sort('_id', -1).skip(offset).limit(page_size)
+
+    res = {'rows': list(users), 'count': total}
+    jsonRes = parse(res)
+    return Response(jsonRes, mimetype='application/json')
 
 
 @flask_app.route('/scrape-info', methods=['GET'])
@@ -59,14 +67,12 @@ def get_scrape_info():
     total = users.count_documents(query)
 
     if sort_by and sort_order:
-        engagements = users.find(query).sort(
-            sort_by, int(sort_order)).skip(offset).limit(page_size)
+        engagements = users.find(query).sort(sort_by, int(sort_order)).skip(offset).limit(page_size)
     else:
         engagements = users.find(query).skip(offset).limit(page_size)
 
     res = {'rows': list(engagements), 'count': total}
     jsonRes = parse(res)
-
     return Response(jsonRes, mimetype='application/json')
 
 
@@ -124,7 +130,7 @@ def start_scraper():
     email = body.get('email')
     scraping_user = body.get('scrapingUser', None)
     scraping_pass = body.get('scrapingPass', None)
-    
+
     if not username or not email:
         return Response(parse({'message': 'missing params'}),  status=400, mimetype='application/json')
 
@@ -134,6 +140,19 @@ def start_scraper():
 
     scrape_user.delay(username, email, scraping_user, scraping_pass)
     return Response(parse({'message': f'started scraping {username}'}), status=202, mimetype='application/json')
+
+
+@flask_app.route('/export-csv-scrapes', methods=['GET'])
+def export_scraped_profiles():
+    cursor = mongo.db.scraped_profiles.find({}).sort('_id', -1)
+    df = pd.DataFrame(list(cursor))
+    del df['_id']
+    del df['id']
+
+    resp = make_response(df.to_csv())
+    resp.headers["Content-Disposition"] = "attachment; filename=scrapes.csv"
+    resp.headers["Content-Type"] = "text/csv"
+    return resp
 
 
 @flask_app.route('/export-csv-engagements')
