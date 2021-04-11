@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, Response, url_for
+from flask import Flask, request, jsonify, Response, make_response, url_for
 from flask_cors import CORS
 from bson import json_util
 from flask_pymongo import PyMongo
@@ -9,7 +9,7 @@ import os
 import random
 import time
 from datetime import datetime
-
+import pandas as pd
 
 flask_app = Flask(__name__)
 CORS(flask_app)
@@ -37,17 +37,16 @@ def not_found(error=None):
 
 @flask_app.route('/scraped-profiles', methods=['GET'])
 def get_scraped_profiles():
-    users = mongo.db.scraped_profiles.find().sort('_id', -1)
+    users = mongo.db.scraped_profiles.find({}).sort('_id', -1)
     response = parse(users)
-    # Se usa Response() para que el header content-type sea json
     return Response(response, mimetype='application/json')
 
 
 @flask_app.route('/scrape-info', methods=['GET'])
 def get_scrape_info():
     users = mongo.db.user_engagement
-    page_size = int(request.args.get('pageSize', 20))
     page = int(request.args.get('page', 1))
+    page_size = int(request.args.get('pageSize', 20))
     sort_by = request.args.get('sortBy', None)
     sort_order = request.args.get('order', None)
     user_id = request.args.get('userId')
@@ -60,36 +59,38 @@ def get_scrape_info():
     total = users.count_documents(query)
 
     if sort_by and sort_order:
-        engagements = users.find(query).sort(sort_by, int(sort_order)).skip(offset).limit(page_size)
+        engagements = users.find(query).sort(
+            sort_by, int(sort_order)).skip(offset).limit(page_size)
     else:
         engagements = users.find(query).skip(offset).limit(page_size)
 
-    xd = {'rows': list(engagements), 'count': total}
-    response = parse(xd)
+    res = {'rows': list(engagements), 'count': total}
+    jsonRes = parse(res)
 
-    return Response(response, mimetype='application/json')
+    return Response(jsonRes, mimetype='application/json')
 
 
 @flask_app.route('/scrape-info/liked-posts', methods=['GET'])
 def get_user_interacted_posts():
     username = request.args.get('username')
     profile_id = request.args.get('profileId')
-    # el datetime de python esta en segundos y el de mongo en ms, por eso la division
+    page = int(request.args.get('page', 1))
+    page_size = int(request.args.get('pageSize', 20))
+    sort_by = request.args.get('sortBy', None)
+    sort_order = request.args.get('order', None)
     timestamp = int(request.args.get('timestamp')) / 1000.0
-    parsed_date = datetime.utcfromtimestamp(timestamp)
 
-    # Buscar todos los posts de ese scrape que el usuario dio like o comento
+    parsed_date = datetime.utcfromtimestamp(timestamp)
+    offset = (page-1) * page_size
+
+    query = {
+        'profile_id': profile_id,
+        'scraped_date': parsed_date,
+        '$or': [{'likers': username}, {'commenters': username}]
+    }
+
     pipeline = [
-        {
-            '$match': {
-                'profile_id': profile_id,
-                'scraped_date': parsed_date,
-                '$or': [
-                    {'likers': username},
-                    {'commenters': username}
-                ]
-            }
-        },
+        {'$match': query},
         {
             '$project': {
                 'short_code': 1,
@@ -101,9 +102,19 @@ def get_user_interacted_posts():
             }
         }
     ]
+
+    if sort_by and sort_order:
+        pipeline.append({'$sort': {sort_by: int(sort_order)}})
+
+    pipeline.append({'$skip': offset})
+    pipeline.append({'$limit': page_size})
+
+    total = mongo.db.posts.count_documents(query)
     posts = mongo.db.posts.aggregate(pipeline)
-    response = parse(posts)
-    return Response(response, mimetype='application/json')
+    res = {'rows': list(posts), 'count': total}
+    jsonRes = parse(res)
+
+    return Response(jsonRes, mimetype='application/json')
 
 
 @flask_app.route('/scrape', methods=['POST'])
@@ -117,6 +128,63 @@ def start_scraper():
 
     scrape_user.delay(username, email)
     return Response(parse({'message': f'started scraping {username}'}), status=202, mimetype='application/json')
+
+
+@flask_app.route('/export-csv-engagements')
+def export_engagements_csv():
+    users = mongo.db.user_engagement
+    user_id = request.args.get('userId')
+    timestamp = int(request.args.get('timestamp')) / 1000.0
+
+    parsed_date = datetime.utcfromtimestamp(timestamp)
+    cursor = users.find({'profile_id': user_id, 'date': parsed_date})
+
+    df = pd.DataFrame(list(cursor))
+    del df['_id']
+    del df['profile_id']
+
+    resp = make_response(df.to_csv())
+    resp.headers["Content-Disposition"] = "attachment; filename=user_engagement.csv"
+    resp.headers["Content-Type"] = "text/csv"
+    return resp
+
+
+@flask_app.route('/export-csv-posts')
+def export_posts_csv():
+    posts = mongo.db.posts
+    username = request.args.get('username')
+    profile_id = request.args.get('profileId')
+    timestamp = int(request.args.get('timestamp')) / 1000.0
+
+    parsed_date = datetime.utcfromtimestamp(timestamp)
+    query = {
+        'profile_id': profile_id,
+        'scraped_date': parsed_date,
+        '$or': [{'likers': username}, {'commenters': username}]
+    }
+
+    pipeline = [
+        {'$match': query},
+        {
+            '$project': {
+                'short_code': 1,
+                'likes_count': 1,
+                'comments_count': 1,
+                'engagement': 1,
+                'has_liked': {'$in': [username, '$likers']},
+                'has_commented': {'$in': [username, '$commenters']},
+            }
+        }
+    ]
+    cursor = posts.aggregate(pipeline)
+
+    df = pd.DataFrame(list(cursor))
+    del df['_id']
+
+    resp = make_response(df.to_csv())
+    resp.headers["Content-Disposition"] = "attachment; filename=interacted_posts.csv"
+    resp.headers["Content-Type"] = "text/csv"
+    return resp
 
 
 # Celery tasks
