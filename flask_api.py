@@ -122,11 +122,17 @@ def start_scraper():
     body = request.json
     username = body.get('username')
     email = body.get('email')
-
+    scraping_user = body.get('scrapingUser', None)
+    scraping_pass = body.get('scrapingPass', None)
+    
     if not username or not email:
         return Response(parse({'message': 'missing params'}),  status=400, mimetype='application/json')
 
-    scrape_user.delay(username, email)
+    if not scraping_user or not scraping_pass:
+        scraping_user = 'platanitomaduro42'
+        scraping_pass = 'platanito42'
+
+    scrape_user.delay(username, email, scraping_user, scraping_pass)
     return Response(parse({'message': f'started scraping {username}'}), status=202, mimetype='application/json')
 
 
@@ -189,8 +195,8 @@ def export_posts_csv():
 
 # Celery tasks
 @celery.task(name='flask_api.scrape_user')
-def scrape_user(username, email):
-    return scraper.scrape_user(username, email)
+def scrape_user(username, email, scraping_user, scraping_pass):
+    return scraper.scrape_user(username, email, scraping_user, scraping_pass)
 
 
 if __name__ == '__main__':

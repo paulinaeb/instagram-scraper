@@ -51,7 +51,7 @@ def send_email(scraped_user, receiver):
         smtp.send_message(msg)
 
 
-def scrape_user(username, email=''):
+def scrape_user(username, email='', scraping_user='platanitomaduro42', scraping_pass='platanito42'):
     from flask_api import mongo
     db = mongo.db
     start_time = datetime.utcnow()
@@ -59,7 +59,6 @@ def scrape_user(username, email=''):
     scraped_posts = None
 
     print('\n------STARTING SCRAPE------\n')
-
     # Verificar si ya ha sido scrapeado el usuario anteriormente
     cursor = db.scraped_profiles.find({'username': username}).sort('scraped_date', -1).limit(1)
     scraped_profile = next(cursor, None)
@@ -73,7 +72,7 @@ def scrape_user(username, email=''):
     # Obtener los datos de la cuenta
     try:
         instagram = Instagram(5, 5, 12) # sleep, min_sleep, max_sleep
-        instagram.with_credentials('platanitomaduro42', 'platanito42')
+        instagram.with_credentials(scraping_user, scraping_pass)
         instagram.login()
         account = instagram.get_account(username)
     except Exception as e:
