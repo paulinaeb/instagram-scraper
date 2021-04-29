@@ -9,6 +9,9 @@ from email.message import EmailMessage
 
 EMAIL_ADDRESS = 'platanitomaduro42@gmail.com'
 EMAIL_PASSWORD = 'platanito42'
+MIN_SLEEP = 5
+MAX_SLEEP = 10
+
 
 def scrape_test(username, email):
     from flask_api import mongo as flaskmongo
@@ -57,6 +60,7 @@ def scrape_user(username, email='', scraping_user='platanitomaduro42', scraping_
     start_time = datetime.utcnow()
     user_has_been_scraped = False
     scraped_posts = None
+    error_count = 0
 
     print('\n------STARTING SCRAPE------\n')
     # Verificar si ya ha sido scrapeado el usuario anteriormente
@@ -71,13 +75,13 @@ def scrape_user(username, email='', scraping_user='platanitomaduro42', scraping_
 
     # Obtener los datos de la cuenta
     try:
-        instagram = Instagram(5, 5, 12) # sleep, min_sleep, max_sleep
+        instagram = Instagram(5, MIN_SLEEP, MAX_SLEEP)
         instagram.with_credentials(scraping_user, scraping_pass)
         instagram.login()
         account = instagram.get_account(username)
     except Exception as e:
         print('Error al obtener la cuenta\n', e)
-        return
+        return 'Error al obtener la cuenta'
 
     # account.media_count = 5
     print(f'# DE POSTS DE {username}: {account.media_count}\n')
@@ -87,7 +91,7 @@ def scrape_user(username, email='', scraping_user='platanitomaduro42', scraping_
         all_posts = instagram.get_medias_by_user_id(account.identifier, account.media_count)
     except Exception as e:
         print('Error obteniendo la lista de posts de la cuenta\n', e)
-        return
+        return 'Error al obtener lista de posts'
 
     result = []
     total_likes_count = 0
@@ -148,6 +152,7 @@ def scrape_user(username, email='', scraping_user='platanitomaduro42', scraping_
             db.posts.insert_one(post_info)
         except Exception as e:
             print('Ocurrio una excepcion durante el scrape:', e)
+            error_count += 1
 
     # Guardar perfil scrapeado en la BD
     db.scraped_profiles.insert_one({
@@ -161,6 +166,9 @@ def scrape_user(username, email='', scraping_user='platanitomaduro42', scraping_
         'total_engagement': total_engagement_sum / account.media_count,
         'scraped_date': start_time,
     })
+
+    print('--FINISHED GETTING POSTS--')
+    print(f'ERROR COUNT: {error_count}')
 
     # Calcular las estadisticas de engagement
     if len(result) > 0:
@@ -210,7 +218,7 @@ def test(user):
 
 if __name__ == '__main__':
     print('ejecutando scraper como __main__')
-    instagram = Instagram(5, 2, 5) # sleep, min_sleep, max_sleep
+    # instagram = Instagram(5, 2, 5) # sleep, min_sleep, max_sleep
     # instagram.with_credentials('platanitomaduro42', 'platanito42')
     # instagram.login()
     
