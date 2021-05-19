@@ -219,4 +219,4 @@ def scrape_user(username, email, scraping_user, scraping_pass):
 
 
 if __name__ == '__main__':
-    flask_app.run(debug=True)
+    flask_app.run(host='0.0.0.0', port=5000, debug=True)
