@@ -19,7 +19,7 @@ flask_app.config['CELERY_BROKER_URL'] = config.CELERY_BROKER_URL
 celery = make_celery(flask_app)
 mongo = PyMongo(flask_app)
 
-
+# Convierte a json
 def parse(data):
     return json_util.dumps(data)
 
@@ -34,7 +34,7 @@ def not_found(error=None):
     response.status_code = 404
     return response
 
-
+# Lista de scrapes ordenados por fecha
 @flask_app.route('/scraped-profiles', methods=['GET'])
 def get_scraped_profiles():
     collection = mongo.db.scraped_profiles
@@ -49,7 +49,7 @@ def get_scraped_profiles():
     jsonRes = parse(res)
     return Response(jsonRes, mimetype='application/json')
 
-
+# Lista de usuarios que interactuaron con una cuenta scrapeada
 @flask_app.route('/scrape-info', methods=['GET'])
 def get_scrape_info():
     users = mongo.db.user_engagement
@@ -58,7 +58,7 @@ def get_scrape_info():
     sort_by = request.args.get('sortBy', None)
     sort_order = request.args.get('order', None)
     user_id = request.args.get('userId')
-    timestamp = int(request.args.get('timestamp')) / 1000.0
+    timestamp = int(request.args.get('timestamp')) / 1000.0 # Python timestamp es segundos y mongodb es en ms since epoch
 
     parsed_date = datetime.utcfromtimestamp(timestamp)
     offset = (page-1) * page_size
@@ -70,12 +70,12 @@ def get_scrape_info():
         engagements = users.find(query).sort(sort_by, int(sort_order)).skip(offset).limit(page_size)
     else:
         engagements = users.find(query).skip(offset).limit(page_size)
-
+    
     res = {'rows': list(engagements), 'count': total}
     jsonRes = parse(res)
     return Response(jsonRes, mimetype='application/json')
 
-
+# Lista de posts de una cuenta a los que el usuario indicado comento o dio like
 @flask_app.route('/scrape-info/liked-posts', methods=['GET'])
 def get_user_interacted_posts():
     username = request.args.get('username')
@@ -122,7 +122,7 @@ def get_user_interacted_posts():
 
     return Response(jsonRes, mimetype='application/json')
 
-
+# Inicia un nuevo scrape
 @flask_app.route('/scrape', methods=['POST'])
 def start_scraper():
     body = request.json
@@ -141,7 +141,7 @@ def start_scraper():
     scrape_user.delay(username, email, scraping_user, scraping_pass)
     return Response(parse({'message': f'started scraping {username}'}), status=202, mimetype='application/json')
 
-
+# CSV de la lista de scrapes
 @flask_app.route('/export-csv-scrapes', methods=['GET'])
 def export_scraped_profiles():
     cursor = mongo.db.scraped_profiles.find({}).sort('_id', -1)
@@ -154,7 +154,7 @@ def export_scraped_profiles():
     resp.headers["Content-Type"] = "text/csv"
     return resp
 
-
+# CSV de la lista de usuarios que interactuaron con una cuenta
 @flask_app.route('/export-csv-engagements')
 def export_engagements_csv():
     users = mongo.db.user_engagement
@@ -173,7 +173,7 @@ def export_engagements_csv():
     resp.headers["Content-Type"] = "text/csv"
     return resp
 
-
+# CSV de la lista de posts de un scrape con los que una persona dada interactuo
 @flask_app.route('/export-csv-posts')
 def export_posts_csv():
     posts = mongo.db.posts
