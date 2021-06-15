@@ -9,8 +9,8 @@ from email.message import EmailMessage
 
 EMAIL_ADDRESS = 'platanitomaduro42@gmail.com'
 EMAIL_PASSWORD = 'platanito42'
-MIN_SLEEP = 4
-MAX_SLEEP = 8
+MIN_SLEEP = 2
+MAX_SLEEP = 6
 
 
 def scrape_test(username, email):
@@ -54,7 +54,7 @@ def send_email(scraped_user, receiver):
         smtp.send_message(msg)
 
 
-def scrape_user(username, email='', scraping_user='platanitomaduro42', scraping_pass='platanito42'):
+def scrape_user(username, email='', scraping_user='platanitomaduro42', scraping_pass='nosoyunbot'):
     from flask_api import mongo
     db = mongo.db
     start_time = datetime.utcnow()
@@ -71,7 +71,7 @@ def scrape_user(username, email='', scraping_user='platanitomaduro42', scraping_
         user_has_been_scraped = True
         # Buscar en BD la info de todos los posts de este usuario levantada durante el ultimo scrapeo
         query = {'profile_id': scraped_profile['id'], 'scraped_date': scraped_profile['scraped_date']}
-        scraped_posts = db.posts.find(query)
+        scraped_posts = list(db.posts.find(query)) # TODO: Buscar alternativa para no tener que cargar todos los posts en memoria
         print(f'Profile had {db.posts.count_documents(query)} scraped posts last time it was analyzed')
 
     # Obtener los datos de la cuenta
@@ -158,15 +158,18 @@ def scrape_user(username, email='', scraping_user='platanitomaduro42', scraping_
             post_info['likers'] = [liker.username for liker in likers['accounts']]
 
             # Get commenters
-            print(f'--GETTING COMMENTERS OF POST #{i}: {post.short_code} ({post.comments_count} COMMENTS)--')
-            comments_result = instagram.get_media_comments_by_code(post.short_code, post.comments_count)
-            all_commenters = [c.owner.username for c in comments_result['comments']]
-            unique_commenters = list(set(all_commenters))
-            print(f"--DONE. GOT {len(all_commenters)} COMMENTERS--\n")
-            print('------------------------------------------------------')
-            post_info['commenters'] = unique_commenters
+            if post.comments_count == 0:
+                print('--Post has no comments--')
+                post_info['commenters'] = []
+            else:
+                print(f'--GETTING COMMENTERS OF POST #{i}: {post.short_code} ({post.comments_count} COMMENTS)--')
+                comments_result = instagram.get_media_comments_by_code(post.short_code, post.comments_count)
+                all_commenters = [c.owner.username for c in comments_result['comments']]
+                unique_commenters = list(set(all_commenters))
+                print(f"--DONE. GOT {len(all_commenters)} COMMENTERS--\n")
+                print('------------------------------------------------------')
+                post_info['commenters'] = unique_commenters
 
-            # post_info['commenters'] = []
             result.append(post_info)
 
             # Guardar o actualizar el post en la BD

@@ -137,7 +137,7 @@ def start_scraper():
 
     if not scraping_user or not scraping_pass:
         scraping_user = 'platanitomaduro42'
-        scraping_pass = 'platanito42'
+        scraping_pass = 'nosoyunbot'
 
     scrape_user.delay(username, email, scraping_user, scraping_pass)
     return Response(parse({'message': f'started scraping {username}'}), status=202, mimetype='application/json')
@@ -186,7 +186,7 @@ def export_posts_csv():
     query = {
         'profile_id': profile_id,
         'scraped_date': parsed_date,
-        '$or': [{'likers': username}, {'commenters': username}]
+        # '$or': [{'likers': username}, {'commenters': username}]
     }
 
     pipeline = [
@@ -197,8 +197,9 @@ def export_posts_csv():
                 'likes_count': 1,
                 'comments_count': 1,
                 'engagement': 1,
-                'has_liked': {'$in': [username, '$likers']},
-                'has_commented': {'$in': [username, '$commenters']},
+                'created_time': 1,
+                # 'has_liked': {'$in': [username, '$likers']},
+                # 'has_commented': {'$in': [username, '$commenters']},
             }
         }
     ]
