@@ -9,8 +9,8 @@ from email.message import EmailMessage
 
 EMAIL_ADDRESS = 'platanitomaduro42@gmail.com'
 EMAIL_PASSWORD = 'platanito42'
-MIN_SLEEP = 5
-MAX_SLEEP = 10
+MIN_SLEEP = 2
+MAX_SLEEP = 6
 
 
 def scrape_test(username, email):
@@ -54,14 +54,14 @@ def send_email(scraped_user, receiver):
         smtp.send_message(msg)
 
 
-def scrape_user(username, email='', scraping_user='platanitomaduro42', scraping_pass='platanito42'):
+def scrape_user(username, email='', scraping_user='platanitomaduro42', scraping_pass='nosoyunbot'):
     from flask_api import mongo
     db = mongo.db
     start_time = datetime.utcnow()
     user_has_been_scraped = False
     scraped_posts = None
     error_count = 0
-
+ 
     print('\n------STARTING SCRAPE------\n')
     # Verificar si ya ha sido scrapeado el usuario anteriormente
     cursor = db.scraped_profiles.find({'username': username}).sort('scraped_date', -1).limit(1)
@@ -71,7 +71,8 @@ def scrape_user(username, email='', scraping_user='platanitomaduro42', scraping_
         user_has_been_scraped = True
         # Buscar en BD la info de todos los posts de este usuario levantada durante el ultimo scrapeo
         query = {'profile_id': scraped_profile['id'], 'scraped_date': scraped_profile['scraped_date']}
-        scraped_posts = db.posts.find(query)
+        scraped_posts = list(db.posts.find(query)) # TODO: Buscar alternativa para no tener que cargar todos los posts en memoria
+        print(f'Profile had {db.posts.count_documents(query)} scraped posts last time it was analyzed')
 
     # Obtener los datos de la cuenta
     try:
@@ -83,15 +84,35 @@ def scrape_user(username, email='', scraping_user='platanitomaduro42', scraping_
         print('Error al obtener la cuenta\n', e)
         return 'Error al obtener la cuenta'
 
-    # account.media_count = 5
     print(f'# DE POSTS DE {username}: {account.media_count}\n')
 
-    # Obtener la lista actual de posts de la cuenta
-    try:
-        all_posts = instagram.get_medias_by_user_id(account.identifier, account.media_count)
-    except Exception as e:
-        print('Error obteniendo la lista de posts de la cuenta\n', e)
-        return 'Error al obtener lista de posts'
+    # Obtener la lista actual de posts de la cuenta (3 intentos)
+    for i in range(3):
+        try:
+            all_posts = instagram.get_medias_by_user_id(account.identifier, account.media_count)
+        except Exception as e:
+            print('Error obteniendo la lista de posts de la cuenta:\n', e)
+            if i < 3:
+                print('Intentando obtener posts nuevamente...')
+            else:
+                print('3 intentos fallidos al obtener posts, finalizando programa.')
+                return
+        else:
+            break
+
+    # Insertar usuario en la base de datos para marcar como iniciado
+    inserted_id = db.scraped_profiles.insert_one({
+        'id': account.identifier,
+        'username': username,
+        'post_count': account.media_count,
+        'follower_count': account.followed_by_count,
+        'following_count': account.follows_count,
+        'total_likes_count': -1,
+        'total_comments_count': -1,
+        'total_engagement': -1,
+        'scraped_date': start_time,
+        'completed': False
+    }).inserted_id
 
     result = []
     total_likes_count = 0
@@ -121,6 +142,7 @@ def scrape_user(username, email='', scraping_user='platanitomaduro42', scraping_
         post_info['profile_id'] = account.identifier
         post_info['likes_count'] = post.likes_count
         post_info['comments_count'] = post.comments_count
+        post_info['created_time'] = post.created_time
         post_info['scraped_date'] = start_time
         post_info['engagement'] = (post.likes_count + post.comments_count) / account.followed_by_count * 100
 
@@ -136,15 +158,18 @@ def scrape_user(username, email='', scraping_user='platanitomaduro42', scraping_
             post_info['likers'] = [liker.username for liker in likers['accounts']]
 
             # Get commenters
-            print(f'--GETTING COMMENTERS OF POST #{i}: {post.short_code} ({post.comments_count} COMMENTS)--')
-            comments_result = instagram.get_media_comments_by_code(post.short_code, post.comments_count)
-            all_commenters = [c.owner.username for c in comments_result['comments']]
-            unique_commenters = list(set(all_commenters))
-            print(f"--DONE. GOT {len(all_commenters)} COMMENTERS--\n")
-            print('------------------------------------------------------')
-            post_info['commenters'] = unique_commenters
+            if post.comments_count == 0:
+                print('--Post has no comments--')
+                post_info['commenters'] = []
+            else:
+                print(f'--GETTING COMMENTERS OF POST #{i}: {post.short_code} ({post.comments_count} COMMENTS)--')
+                comments_result = instagram.get_media_comments_by_code(post.short_code, post.comments_count)
+                all_commenters = [c.owner.username for c in comments_result['comments']]
+                unique_commenters = list(set(all_commenters))
+                print(f"--DONE. GOT {len(all_commenters)} COMMENTERS--\n")
+                print('------------------------------------------------------')
+                post_info['commenters'] = unique_commenters
 
-            # post_info['commenters'] = []
             result.append(post_info)
 
             # Guardar o actualizar el post en la BD
@@ -155,17 +180,12 @@ def scrape_user(username, email='', scraping_user='platanitomaduro42', scraping_
             error_count += 1
 
     # Guardar perfil scrapeado en la BD
-    db.scraped_profiles.insert_one({
-        'id': account.identifier,
-        'username': username,
-        'post_count': account.media_count,
-        'follower_count': account.followed_by_count,
-        'following_count': account.follows_count,
+    db.scraped_profiles.update_one({'_id': inserted_id}, {'$set': {
         'total_likes_count': total_likes_count,
         'total_comments_count': total_comments_count,
         'total_engagement': total_engagement_sum / account.media_count,
-        'scraped_date': start_time,
-    })
+        'completed': True
+    }})
 
     print('--FINISHED GETTING POSTS--')
     print(f'ERROR COUNT: {error_count}')
