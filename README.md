@@ -36,10 +36,8 @@ El front-end se encuentra como un módulo del dashboard de opentech, en el apart
 # Docker
 Para trabajar localmente con Docker, se debe de tener Docker y Docker Compose instalado correctamente en el equipo y corriendo. La dockerización del proyecto se encuentra en la rama docker del repositorio, esta rama al igual que master está protegida a cambios y se debe de actualizar mediante Merge Requests por lo tanto es necesario crear una rama a partir de esta para el desarrollo con el ambiente Docker.
 
-En el archivo Dockerfile.yml está configurado el build de la imagen de Docker, de la cual se levantarán los contenedores y en el archivo docker-compose.yml se encuentra las descripciones para levantar todos los servicios del ambiente de desarrollo. 
+En el archivo `Dockerfile` está configurado el build de la imagen de Docker, de la cual se levantarán los contenedores y en el archivo docker-compose.yml se encuentra las descripciones para levantar todos los servicios del ambiente de desarrollo. 
 
-Para levantar el proyecto se utiliza el siguiente comando:
-```docker-compose up -d```
+Para levantar el proyecto se utiliza el siguiente comando: `docker-compose up -d`
 
-Para detener los contenedores:
-```docker-compose down```
+Para detener los contenedores: `docker-compose down`
