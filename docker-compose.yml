@@ -1,0 +1,14 @@
+version: "3.0"
+services:
+    rabbitmq-server:
+      image: rabbitmq
+      ports:
+        - "5672:5672"
+    
+    instagram-api:
+      build: ./instagram-bot-api
+      depends_on:
+        - "rabbitmq-server"
+      tty: true
+      ports:
+        - "5000:5000"
