@@ -31,3 +31,15 @@ En el archivo `flask_api.py` están las cosas relacionadas a la API y a la conex
 
 ## El front-end
 El front-end se encuentra como un módulo del dashboard de opentech, en el apartado de "scraper instagram", el código fue hecho en ReactJS usando hooks. Este se conecta con la API de flask para comunicarse con el scraper
+
+
+# Docker
+Para trabajar localmente con Docker, se debe de tener Docker y Docker Compose instalado correctamente en el equipo y corriendo. La dockerización del proyecto se encuentra en la rama docker del repositorio, esta rama al igual que master está protegida a cambios y se debe de actualizar mediante Merge Requests por lo tanto es necesario crear una rama a partir de esta para el desarrollo con el ambiente Docker.
+
+En el archivo Dockerfile.yml está configurado el build de la imagen de Docker, de la cual se levantarán los contenedores y en el archivo docker-compose.yml se encuentra las descripciones para levantar todos los servicios del ambiente de desarrollo. 
+
+Para levantar el proyecto se utiliza el siguiente comando:
+```docker-compose up -d```
+
+Para detener los contenedores:
+```docker-compose down```
