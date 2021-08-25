@@ -6,7 +6,7 @@ services:
         - "5672:5672"
     
     instagram-api:
-      build: ./instagram-bot-api
+      build: .
       depends_on:
         - "rabbitmq-server"
       tty: true
