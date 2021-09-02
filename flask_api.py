@@ -29,7 +29,7 @@ def parse(data):
 def not_found(error=None):
     # jsonify so we can add status code
     response = jsonify({
-        'message': f'Rey, este endpoint no existe: {request.url}',
+        'message': f'Este endpoint no existe: {request.url}',
         'status': 404
     })
     response.status_code = 404
@@ -129,8 +129,8 @@ def start_scraper():
     body = request.json
     username = body.get('username')
     email = body.get('email')
-    scraping_user = body.get('scrapingUser', None)
-    scraping_pass = body.get('scrapingPass', None)
+    scraping_user = body.get('scrapingUser')
+    scraping_pass = body.get('scrapingPass')
 
     if not username or not email:
         return Response(parse({'message': 'missing params'}),  status=400, mimetype='application/json')

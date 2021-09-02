@@ -17,7 +17,7 @@ def scrape_test(username, email):
     from flask_api import mongo as flaskmongo
     start_time = datetime.utcnow()
     
-    print('tamos en eso rey...')
+    print('Iniciando scraping....')
     insta = Instagram(5, 2, 5) # sleep, min_sleep, max_sleep
 
     try:
@@ -54,7 +54,7 @@ def send_email(scraped_user, receiver):
         smtp.send_message(msg)
 
 
-def scrape_user(username, email='', scraping_user='platanitomaduro42', scraping_pass='nosoyunbot'):
+def scrape_user(username, email, scraping_user, scraping_pass):
     from flask_api import mongo
     db = mongo.db
     start_time = datetime.utcnow()
