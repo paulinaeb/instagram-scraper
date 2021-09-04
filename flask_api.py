@@ -139,8 +139,11 @@ def start_scraper():
         scraping_user = 'platanitomaduro42'
         scraping_pass = 'nosoyunbot'
 
-    scrape_user.delay(username, email, scraping_user, scraping_pass)
-    return Response(parse({'message': f'started scraping {username}'}), status=202, mimetype='application/json')
+    if scrape_user.delay(username, email, scraping_user, scraping_pass) != 'Error al hacer login: credenciales no validas':
+        return Response(parse({'message': f'started scraping {username}'}), status=202, mimetype='application/json')
+    else:
+        return Response(parse({'message': f'no se pudo iniciar el scraping'}), status=400, mimetype='application/json')
+        
 
 # CSV de la lista de scrapes
 @flask_app.route('/export-csv-scrapes', methods=['GET'])
