@@ -10,7 +10,7 @@ import random
 import time
 from datetime import datetime
 import pandas as pd
-from bson.objectid import ObjectId
+from bson.objectid import ObjectId 
 
 flask_app = Flask(__name__)
 CORS(flask_app)
@@ -86,7 +86,6 @@ def get_user_interacted_posts():
     sort_by = request.args.get('sortBy', None)
     sort_order = request.args.get('order', None)
     timestamp = int(request.args.get('timestamp')) / 1000.0
-
     parsed_date = datetime.utcfromtimestamp(timestamp)
     offset = (page-1) * page_size
 
@@ -136,13 +135,11 @@ def start_scraper():
         return Response(parse({'message': 'missing params'}),  status=400, mimetype='application/json')
 
     if not scraping_user or not scraping_pass:
-        scraping_user = 'platanitomaduro42'
-        scraping_pass = 'nosoyunbot'
+        scraping_user = 'itranslate.pzo'
+        scraping_pass = 'upata*123'
 
-    if scrape_user.delay(username, email, scraping_user, scraping_pass) != 'Error al hacer login: credenciales no validas':
-        return Response(parse({'message': f'started scraping {username}'}), status=202, mimetype='application/json')
-    else:
-        return Response(parse({'message': f'no se pudo iniciar el scraping'}), status=400, mimetype='application/json')
+    scrape_user.delay(username, email, scraping_user, scraping_pass)
+    return Response(parse({'message': f'Procesando solicitud para: {username}'}), status=202, mimetype='application/json')    
         
 
 # CSV de la lista de scrapes
