@@ -1,4 +1,3 @@
-from sys import flags
 from igramscraper.instagram import Instagram
 from time import sleep
 from collections import Counter
@@ -6,8 +5,7 @@ import json
 from pprint import pprint
 from datetime import datetime
 import smtplib
-from email.message import EmailMessage 
-
+from email.message import EmailMessage
 
 EMAIL_ADDRESS = 'platanitomaduro42@gmail.com'
 EMAIL_PASSWORD = 'platanito42'
@@ -18,12 +16,15 @@ MAX_SLEEP = 6
 def scrape_test(username, email):
     from flask_api import mongo as flaskmongo
     start_time = datetime.utcnow()
+    
     print('Getting account...')
     insta = Instagram(5, 2, 5) # sleep, min_sleep, max_sleep
+
     try:
         account = insta.get_account(username)
     except Exception as e:
         return 'Error al obtener la cuenta\n'
+
     print(f'\n# DE POSTS DE {username}: {account.media_count}\n')
 
     flaskmongo.db.test.insert_one({
@@ -34,30 +35,26 @@ def scrape_test(username, email):
         'following_count': account.follows_count,
         'scraped_date': start_time
     })
-    send_email(username, email)
+
+    send_email(username, email, True)
     return f'Se completo el scrape_test para {username}'
 
 
-def send_email(scraped_user, receiver):
+def send_email(scraped_user, receiver, flag):
     print(f'SENDING EMAIL TO {receiver}')
     msg = EmailMessage()
-    msg['Subject'] = 'Scrape Finalizado!'
     msg['From'] = EMAIL_ADDRESS
     msg['To'] = receiver
-    msg.set_content(f'Se ha completado la extracción de data de {scraped_user}. Puede regresar al bot para visualizar la informacion obtenida.')
+    if flag:
+        msg['Subject'] = 'Scrape Finalizado!'
+        msg.set_content(f'Se ha completado la extracción de data de {scraped_user}')
+    else:
+        msg['Subject'] = 'Status de su solicitud de Scrape'
+        msg.set_content(f'Su solicitud de extracción de data de {scraped_user} contiene credenciales invalidas. Verifique e intente de nuevo, o realice su solicitud con la cuenta predeterminada del bot.')
 
     with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
         smtp.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
         smtp.send_message(msg)
-
-
-def login(user, passw, instagram):
-    #Hacer login  
-    try: 
-        instagram.with_credentials(user, passw) 
-        instagram.login(two_step_verificator=True)
-    except Exception as e: 
-        return 'Error al hacer login: credenciales no validas' 
 
 
 def scrape_user(username, email, scraping_user, scraping_pass):
@@ -66,17 +63,24 @@ def scrape_user(username, email, scraping_user, scraping_pass):
     start_time = datetime.utcnow()
     user_has_been_scraped = False
     scraped_posts = None
-    error_count = 0  
-    instagram = Instagram(5, MIN_SLEEP, MAX_SLEEP)
+    error_count = 0 
     print('\n------LOGGING IN------\n') 
-    login(scraping_user, scraping_pass, instagram)
+    #Hacer login
+    try: 
+        instagram = Instagram(5, MIN_SLEEP, MAX_SLEEP)
+        instagram.with_credentials(scraping_user, scraping_pass)
+        instagram.login()
+    except Exception as e: 
+        send_email(username, email, False)
+        return 'Error al hacer login: credenciales no validas'
+
+    print('\n------STARTING SCRAPE------\n') 
     # Obtener los datos de la cuenta
     try: 
         account = instagram.get_account(username)
     except Exception as e: 
+        send_email(username, email, False)
         return 'Error al obtener la cuenta del usuario ingresado'
-
-    print('\n------STARTING SCRAPE------\n') 
 
     # Verificar si ya ha sido scrapeado el usuario anteriormente
     cursor = db.scraped_profiles.find({'username': username}).sort('scraped_date', -1).limit(1)
@@ -227,15 +231,17 @@ def calculate_user_engagement(posts, account, previously_scraped, start_time, em
     } for user, likes in likes_counter.most_common()]
 
     db.user_engagement.insert_many(stats)
-    send_email(account.username, email)
+    send_email(account.username, email, True)
 
 
 def test(user):
     insta = Instagram(3, 2, 5) # sleep, min_sleep, max_sleep
+
     try:
         account = insta.get_account(user)
     except Exception as e:
         print('Error al obtener la cuenta\n', e)
+
     print(account)
 
 
