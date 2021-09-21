@@ -7,38 +7,12 @@ from datetime import datetime
 import smtplib
 from email.message import EmailMessage
 
+
 EMAIL_ADDRESS = 'platanitomaduro42@gmail.com'
 EMAIL_PASSWORD = 'platanito42'
 MIN_SLEEP = 2
 MAX_SLEEP = 6
-
-
-def scrape_test(username, email):
-    from flask_api import mongo as flaskmongo
-    start_time = datetime.utcnow()
-    
-    print('Getting account...')
-    insta = Instagram(5, 2, 5) # sleep, min_sleep, max_sleep
-
-    try:
-        account = insta.get_account(username)
-    except Exception as e:
-        return 'Error al obtener la cuenta\n'
-
-    print(f'\n# DE POSTS DE {username}: {account.media_count}\n')
-
-    flaskmongo.db.test.insert_one({
-        'id': account.identifier,
-        'username': username,
-        'post_count': account.media_count,
-        'follower_count': account.followed_by_count,
-        'following_count': account.follows_count,
-        'scraped_date': start_time
-    })
-
-    send_email(username, email, True)
-    return f'Se completo el scrape_test para {username}'
-
+ 
 
 def send_email(scraped_user, receiver, flag):
     print(f'SENDING EMAIL TO {receiver}')
@@ -56,7 +30,7 @@ def send_email(scraped_user, receiver, flag):
         smtp.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
         smtp.send_message(msg)
 
-
+#instagram scraper principal function
 def scrape_user(username, email, scraping_user, scraping_pass):
     from flask_api import mongo
     db = mongo.db
@@ -64,23 +38,25 @@ def scrape_user(username, email, scraping_user, scraping_pass):
     user_has_been_scraped = False
     scraped_posts = None
     error_count = 0 
+    instagram = Instagram(5, MIN_SLEEP, MAX_SLEEP)
     print('\n------LOGGING IN------\n') 
     #Hacer login
     try: 
-        instagram = Instagram(5, MIN_SLEEP, MAX_SLEEP)
         instagram.with_credentials(scraping_user, scraping_pass)
         instagram.login()
     except Exception as e: 
         send_email(username, email, False)
         return 'Error al hacer login: credenciales no validas'
 
-    print('\n------STARTING SCRAPE------\n') 
+    print('\n------GETTING ACCOUNT------\n') 
     # Obtener los datos de la cuenta
     try: 
         account = instagram.get_account(username)
     except Exception as e: 
         send_email(username, email, False)
         return 'Error al obtener la cuenta del usuario ingresado'
+
+    print('\n------STARTING SCRAPE------\n') 
 
     # Verificar si ya ha sido scrapeado el usuario anteriormente
     cursor = db.scraped_profiles.find({'username': username}).sort('scraped_date', -1).limit(1)
@@ -234,15 +210,23 @@ def calculate_user_engagement(posts, account, previously_scraped, start_time, em
     send_email(account.username, email, True)
 
 
-def test(user):
+def find_user(userSearch):
     insta = Instagram(3, 2, 5) # sleep, min_sleep, max_sleep
+    print('\n------iniciando buscador: inicio de sesion------\n') 
+    #Hacer login
+    try: 
+        insta.with_credentials('prueba.ejemplo20', 'nosoyunbot')
+        insta.login()
+    except Exception as e:  
+        return 'Error al hacer login: credenciales no validas'
 
+    print('\n ---getting account--- \n')
     try:
-        account = insta.get_account(user)
+        account = insta.get_account(userSearch)
     except Exception as e:
         print('Error al obtener la cuenta\n', e)
-
     print(account)
+    followers = []
 
 
 if __name__ == '__main__':

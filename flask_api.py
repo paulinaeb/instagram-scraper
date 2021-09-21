@@ -122,6 +122,16 @@ def get_user_interacted_posts():
 
     return Response(jsonRes, mimetype='application/json')
 
+
+#Finder
+@flask_app.route('/finder', methods=['POST'])
+def start_finder(): 
+    body = request.json
+    userSearch = body.get('userSearch')
+    find_user.delay(userSearch)
+    return Response(parse({'message': f'Procesando busqueda para: {userSearch}'}), status=202, mimetype='application/json')   
+
+
 # Inicia un nuevo scrape
 @flask_app.route('/scrape', methods=['POST'])
 def start_scraper():
@@ -275,6 +285,11 @@ def delete_scrape(scrape_id):
 @celery.task(name='flask_api.scrape_user')
 def scrape_user(username, email, scraping_user, scraping_pass):
     return scraper.scrape_user(username, email, scraping_user, scraping_pass)
+
+
+@celery.task(name='flask_api.find_user')
+def find_user(userSearch):
+    return scraper.find_user(userSearch)
 
 
 if __name__ == '__main__':
