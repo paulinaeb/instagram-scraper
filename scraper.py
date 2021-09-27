@@ -44,12 +44,7 @@ def extract(proxy):
     return proxy
 
 #inicializa los proxies y escoge uno al azar
-def newproxy():
-    proxylist = getProxies()
-    #print(len(proxylist))
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        executor.map(extract, proxylist)
-
+def newproxy(proxylist):
     proxy = random.choice(proxylist) 
     random_proxy= { 'http': 'http://'+proxy, 
                     } 
@@ -66,7 +61,7 @@ def send_email(scraped_user, receiver, flag):
         msg.set_content(f'Se ha completado la extracción de data de {scraped_user}')
     else:
         msg['Subject'] = 'Status de su solicitud de Scrape'
-        msg.set_content(f'Su solicitud de extracción de data de {scraped_user} contiene credenciales invalidas. Verifique e intente de nuevo, o realice su solicitud con la cuenta predeterminada del bot.')
+        msg.set_content(f'Su solicitud de extracción de data del usuario {scraped_user} contiene datos inválidos. Verifique e intente de nuevo.')
 
     with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
         smtp.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
@@ -255,21 +250,24 @@ def calculate_user_engagement(posts, account, previously_scraped, start_time, em
 #-----funciones de micro-influencer finder-----
 def interacciones(followers, instagram, account):
     last_post = instagram.get_medias_by_user_id(account.identifier, 1)
-    engagement=0 
+    likes= comments = engagement= 0
     if len(last_post)>0 and followers>0:
         likes= last_post[0].likes_count
         comments = last_post[0].comments_count   
-        engagement = (likes + comments) / (followers*100)
-    print(engagement)  
-    return[likes,followers,engagement]    
+        engagement = ((likes + comments)/followers)*100 
+    return[likes,comments,engagement]    
 
 
 def find_user(userSearch):
     from flask_api import mongo
     db = mongo.db
     start_time = datetime.utcnow()
+    proxylist = getProxies()
+    #print(len(proxylist))
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        executor.map(extract, proxylist)
     insta = Instagram()
-    insta.set_proxies(newproxy())
+    insta.set_proxies(newproxy(proxylist))
     print('\n------iniciando buscador: inicio de sesion------\n') 
     #Hacer login
     try: 
@@ -283,14 +281,9 @@ def find_user(userSearch):
         account = insta.get_account(userSearch)
     except Exception as e:
         return 'Error al obtener la cuenta\n'+str(e) 
-
-    print(account.username)
-    print('seguidores') 
-    account_followers = account.followed_by_count
-    print(account_followers)
-    print('siguiendo')
-    account_following = account.follows_count
-    print(account_following)
+ 
+    account_followers = account.followed_by_count 
+    account_following = account.follows_count 
     id=account.identifier
     #guardar en base de datos
     inserted_id = db.searched_profile.insert_one({
@@ -307,15 +300,13 @@ def find_user(userSearch):
     influencers = [] 
     followers = insta.get_followers(id, account_followers, account_followers)
     print('---finding influencers---')
+    #encuentra y guarda en la base de datos los seguidores con cuentas publicas
     for follower in followers['accounts']: 
-        insta.set_proxies(newproxy())
+        insta.set_proxies(newproxy(proxylist))
         if follower.is_private is False:  
             user = insta.get_account(follower.username) 
-            username=user.username  
-            print(username)
-            print('seguidores')
-            follower_count= user.followed_by_count
-            print(follower_count) 
+            username=user.username   
+            follower_count= user.followed_by_count 
             user_info = {}
             user_info['username']= username
             user_info['follower_count']= follower_count
@@ -323,41 +314,24 @@ def find_user(userSearch):
             user_info['total_engagement']= -1 
             db.followers.insert_one(user_info)
             influencers.append(user)
-    #guardar interacciones del usuario buscado
-    print('---interacciones---')
-    interacciones_list= interacciones(account_followers, insta, account)
-    print('likes')
-    print(interacciones_list[0])
-    print('comments')
-    print(interacciones_list[1])
-    print('engagement')
-    print(interacciones_list[2])
-    print('interacciones')
-    print(interacciones_list[0]+interacciones_list[1])
+    # busca en la base de datos los influencers para calcular su engagement
+    col=db['followers'] 
+    for user in influencers:
+        insta.set_proxies(newproxy(proxylist))
+        username=user.username
+        for x in col.find({'scraped_date': start_time, 'username': username}): 
+            interacciones_follower = interacciones(x['follower_count'], insta, user)
+            db.followers.update_one({
+                'scraped_date': start_time, 
+                'username': username}, {'$set': {'total_engagement': interacciones_follower[2]}})
+
+    #guardar interacciones del usuario buscado 
+    print('---finalizando busqueda---')
+    interacciones_list= interacciones(account_followers, insta, account) 
     db.searched_profile.update_one({'_id': inserted_id}, {'$set': { 
         'total_engagement': interacciones_list[2],
         'completed': True
     }})
-    col=db['followers']
-    # for user in influencers: 
-    #     for x in col.find({'scraped_date': start_time, 'username': 'beatrizfratini'}): 
-    #         print(x['username'])
-    #         print(x['follower_count'])
-    #         break
-        # insta.set_proxies(newproxy())
-        # print(user.username)
-        # last_post = insta.get_medias_by_user_id(user.identifier, 1)
-        # if len(last_post)>0:
-        #     likes = last_post[0].likes_count
-        #     comments = last_post[0].comments_count
-        #     print('likes')
-        #     print(likes)
-        #     print('comments')
-        #     print(comments)  
-        #     engagement=0 
-        #     print('engagement')
-        #     engagement = (likes + comments) / (follower_count*100)
-        #     print(engagement)
 
 
 if __name__ == '__main__':
