@@ -292,6 +292,8 @@ def find_user(userSearch):
         'follower_count': account_followers,
         'following_count': account_following, 
         'total_engagement': -1,
+        'total_likes_count': -1,
+        'total_comments_count': -1,
         'scraped_date': start_time,
         'completed': False
     }).inserted_id 
@@ -329,6 +331,8 @@ def find_user(userSearch):
     print('---finalizando busqueda---')
     interacciones_list= interacciones(account_followers, insta, account) 
     db.searched_profile.update_one({'_id': inserted_id}, {'$set': { 
+        'total_likes_count': interacciones_list[0],
+        'total_comments_count':interacciones_list[1],
         'total_engagement': interacciones_list[2],
         'completed': True
     }})

@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify, Response, make_response, url_for
 from flask_cors import CORS
 from bson import json_util
 from flask_pymongo import PyMongo
+from pymongo import collection
 from flask_celery import make_celery
 import config
 import scraper
@@ -42,11 +43,44 @@ def get_scraped_profiles():
     page = int(request.args.get('page', 1))
     page_size = int(request.args.get('pageSize', 20))
     offset = (page-1) * page_size
-
     total = collection.count_documents({})
     users = collection.find({}).sort('_id', -1).skip(offset).limit(page_size)
-
     res = {'rows': list(users), 'count': total}
+    jsonRes = parse(res)
+    return Response(jsonRes, mimetype='application/json')
+
+
+#lista de usuarios buscados, ordenados por fecha
+@flask_app.route('/searched-profiles', methods=['GET'])
+def get_searched_profiles():
+    collection = mongo.db.searched_profile
+    page = int(request.args.get('page', 1))
+    page_size = int(request.args.get('pageSize', 20))
+    offset = (page-1) * page_size
+    total = collection.count_documents({})
+    users = collection.find({}).sort('_id', -1).skip(offset).limit(page_size)
+    res = {'rows': list(users), 'count': total}
+    jsonRes = parse(res)
+    return Response(jsonRes, mimetype='application/json')
+
+#lista de seguidores del usuario buscado
+@flask_app.route('/search-info', methods=['GET'])
+def get_search_info():
+    users= mongo.db.followers
+    page = int(request.args.get('page', 1))
+    page_size = int(request.args.get('pageSize', 20))
+    sort_by = request.args.get('sortBy', None)
+    sort_order = request.args.get('order', None) 
+    timestamp = int(request.args.get('timestamp')) / 1000.0 
+    parsed_date = datetime.utcfromtimestamp(timestamp)
+    offset = (page-1) * page_size
+    query = {'scraped_date': parsed_date}
+    total = users.count_documents(query)
+    if sort_by and sort_order:
+        engagements = users.find(query).sort(sort_by, int(sort_order)).skip(offset).limit(page_size)
+    else:
+        engagements = users.find(query).skip(offset).limit(page_size)
+    res = {'rows': list(engagements), 'count': total}
     jsonRes = parse(res)
     return Response(jsonRes, mimetype='application/json')
 
@@ -60,18 +94,14 @@ def get_scrape_info():
     sort_order = request.args.get('order', None)
     profile_id = request.args.get('userId')
     timestamp = int(request.args.get('timestamp')) / 1000.0 # Python timestamp es segundos y mongodb es en ms since epoch
-
     parsed_date = datetime.utcfromtimestamp(timestamp)
     offset = (page-1) * page_size
-
     query = {'profile_id': profile_id, 'date': parsed_date}
     total = users.count_documents(query)
-
     if sort_by and sort_order:
         engagements = users.find(query).sort(sort_by, int(sort_order)).skip(offset).limit(page_size)
     else:
         engagements = users.find(query).skip(offset).limit(page_size)
-    
     res = {'rows': list(engagements), 'count': total}
     jsonRes = parse(res)
     return Response(jsonRes, mimetype='application/json')
