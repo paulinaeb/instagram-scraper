@@ -14,9 +14,7 @@ import concurrent.futures
 
 
 EMAIL_ADDRESS = 'platanitomaduro42@gmail.com'
-EMAIL_PASSWORD = 'platanito42'
-MIN_SLEEP = 2
-MAX_SLEEP = 6
+EMAIL_PASSWORD = 'platanito42' 
 
 #---------funciones para obtener proxies para su rotacion durante el scrape----------#
 #scrape para obtener proxies gratis actualizados
@@ -75,7 +73,12 @@ def scrape_user(username, email, scraping_user, scraping_pass):
     user_has_been_scraped = False
     scraped_posts = None
     error_count = 0 
-    instagram = Instagram(5, MIN_SLEEP, MAX_SLEEP)
+    proxylist = getProxies()
+    #print(len(proxylist))
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        executor.map(extract, proxylist) 
+    instagram = Instagram()
+    instagram.set_proxies(newproxy(proxylist))
     print('\n------LOGGING IN------\n') 
     #Hacer login
     try: 
@@ -88,6 +91,7 @@ def scrape_user(username, email, scraping_user, scraping_pass):
     print('\n------GETTING ACCOUNT------\n') 
     # Obtener los datos de la cuenta
     try: 
+        instagram.set_proxies(newproxy(proxylist))
         account = instagram.get_account(username)
     except Exception as e: 
         send_email(username, email, False)
@@ -111,6 +115,7 @@ def scrape_user(username, email, scraping_user, scraping_pass):
     # Obtener la lista actual de posts de la cuenta (3 intentos)
     for i in range(3):
         try:
+            instagram.set_proxies(newproxy(proxylist))
             all_posts = instagram.get_medias_by_user_id(account.identifier, account.media_count)
         except Exception as e:
             print('Error obteniendo la lista de posts de la cuenta:\n', e)
@@ -121,7 +126,7 @@ def scrape_user(username, email, scraping_user, scraping_pass):
                 return
         else:
             break
-
+    instagram.set_proxies(newproxy(proxylist))
     # Insertar usuario en la base de datos para marcar como iniciado
     inserted_id = db.scraped_profiles.insert_one({
         'id': account.identifier,
@@ -145,7 +150,9 @@ def scrape_user(username, email, scraping_user, scraping_pass):
         # Ver si este post ya ha sido scrapeado y en caso de haberlo sido, comparar likes y comments
         if user_has_been_scraped:
             # Generador que contiene el post evaluado si es que existe en el ultimo scrape de la BD
+            instagram.set_proxies(newproxy(proxylist))
             found_post = next((p for p in scraped_posts if p['short_code'] == post.short_code), None)
+            instagram.set_proxies(newproxy(proxylist))
             if found_post and found_post['likes_count'] == post.likes_count:
                 print(F'--SKIPPING POST #{i} ({post.short_code}) AS IT HAS NOT CHANGED--\n')
                 # Copiar en la BD el registro del post con otra fecha como si se hubiese vuelto a scrapear
@@ -159,6 +166,7 @@ def scrape_user(username, email, scraping_user, scraping_pass):
                 continue
 
         post_info = {}
+        instagram.set_proxies(newproxy(proxylist))
         post_info['post_id'] = post.identifier
         post_info['short_code'] = post.short_code
         post_info['profile_id'] = account.identifier
@@ -167,29 +175,31 @@ def scrape_user(username, email, scraping_user, scraping_pass):
         post_info['created_time'] = post.created_time
         post_info['scraped_date'] = start_time
         post_info['engagement'] = (post.likes_count + post.comments_count) / account.followed_by_count * 100
-
+        instagram.set_proxies(newproxy(proxylist))
         total_likes_count += post.likes_count
         total_comments_count += post.comments_count
         total_engagement_sum += post_info['engagement']
 
         try:
             # Get likers
+            instagram.set_proxies(newproxy(proxylist))
             print(f'--GETTING LIKERS OF POST #{i}: {post.short_code} ({post.likes_count} LIKES)--')
             likers = instagram.get_media_likes_by_code(post.short_code, post.likes_count)
             print(f"--DONE. GOT {len(likers['accounts'])} LIKERS--\n")
             post_info['likers'] = [liker.username for liker in likers['accounts']]
 
             # Get commenters
+            instagram.set_proxies(newproxy(proxylist))
             if post.comments_count == 0:
                 print('--Post has no comments--')
                 post_info['commenters'] = []
             else:
+                instagram.set_proxies(newproxy(proxylist))
                 print(f'--GETTING COMMENTERS OF POST #{i}: {post.short_code} ({post.comments_count} COMMENTS)--')
                 comments_result = instagram.get_media_comments_by_code(post.short_code, post.comments_count)
                 all_commenters = [c.owner.username for c in comments_result['comments']]
                 unique_commenters = list(set(all_commenters))
                 print(f"--DONE. GOT {len(all_commenters)} COMMENTERS--\n")
-                print('------------------------------------------------------')
                 post_info['commenters'] = unique_commenters
 
             result.append(post_info)
@@ -202,6 +212,7 @@ def scrape_user(username, email, scraping_user, scraping_pass):
             error_count += 1
 
     # Guardar perfil scrapeado en la BD
+    instagram.set_proxies(newproxy(proxylist))
     db.scraped_profiles.update_one({'_id': inserted_id}, {'$set': {
         'total_likes_count': total_likes_count,
         'total_comments_count': total_comments_count,
@@ -214,24 +225,27 @@ def scrape_user(username, email, scraping_user, scraping_pass):
 
     # Calcular las estadisticas de engagement
     if len(result) > 0:
-        calculate_user_engagement(result, account, user_has_been_scraped, start_time, email)
+        calculate_user_engagement(result, account, start_time, email, instagram, proxylist)
 
 
-def calculate_user_engagement(posts, account, previously_scraped, start_time, email):
+def calculate_user_engagement(posts, account, start_time, email, instagram, proxylist):
     from flask_api import mongo
     db = mongo.db
     # Se reciben todos los posts del perfil scrapeado, ya sea porque se haya obtenido por la API o de la BD
     likers = []
     commenters = []
     for post in posts:
+        instagram.set_proxies(newproxy(proxylist))
         likers += post.get('likers', [])
         commenters += post.get('commenters', [])
 
     # Contar cuantas veces aparece cada usuario
+    instagram.set_proxies(newproxy(proxylist))
     likes_counter = Counter(likers)
     comments_counter = Counter(commenters)
 
     print('INSERTING USER ENGAGEMENT RELATIONSHIPS TO DB...')
+    instagram.set_proxies(newproxy(proxylist))
     stats = [{
         'username': user,
         'profile_id': account.identifier,
@@ -242,15 +256,27 @@ def calculate_user_engagement(posts, account, previously_scraped, start_time, em
         'comment_percent': comments_counter.get(user, 0) / account.media_count * 100,
         'date': start_time
     } for user, likes in likes_counter.most_common()]
-
+    instagram.set_proxies(newproxy(proxylist))
     db.user_engagement.insert_many(stats)
     send_email(account.username, email, True)
 
 
 #-----funciones de micro-influencer finder-----
 def interacciones(followers, instagram, account):
-    last_post = instagram.get_medias_by_user_id(account.identifier, 1)
     likes= comments = engagement= 0
+    last_post = []
+    for i in range(4):
+        try:
+            last_post = instagram.get_medias_by_user_id(account.identifier, 1)
+        except Exception as e:
+            print('error: '+str(e))
+            if i < 4:
+                print('Intentando obtener posts nuevamente...') 
+            else:
+                print('4 intentos fallidos al obtener posts')
+                return[likes,comments,engagement] 
+        else:
+            break
     if len(last_post)>0 and followers>0:
         likes= last_post[0].likes_count
         comments = last_post[0].comments_count   
@@ -271,7 +297,7 @@ def find_user(userSearch):
     print('\n------iniciando buscador: inicio de sesion------\n') 
     #Hacer login
     try: 
-        insta.with_credentials('prueba.ejemplo20', 'nosoyunbot')
+        insta.with_credentials('itranslate.pzo', 'upata*123')
         insta.login()
     except Exception as e:  
         return 'Error al hacer login: credenciales no validas'+str(e)
@@ -306,6 +332,7 @@ def find_user(userSearch):
     for follower in followers['accounts']: 
         insta.set_proxies(newproxy(proxylist))
         if follower.is_private is False:  
+            insta.set_proxies(newproxy(proxylist))
             user = insta.get_account(follower.username) 
             username=user.username   
             follower_count= user.followed_by_count 
@@ -322,6 +349,7 @@ def find_user(userSearch):
         insta.set_proxies(newproxy(proxylist))
         username=user.username
         for x in col.find({'scraped_date': start_time, 'username': username}): 
+            insta.set_proxies(newproxy(proxylist))
             interacciones_follower = interacciones(x['follower_count'], insta, user)
             db.followers.update_one({
                 'scraped_date': start_time, 
@@ -329,6 +357,7 @@ def find_user(userSearch):
 
     #guardar interacciones del usuario buscado 
     print('---finalizando busqueda---')
+    insta.set_proxies(newproxy(proxylist))
     interacciones_list= interacciones(account_followers, insta, account) 
     db.searched_profile.update_one({'_id': inserted_id}, {'$set': { 
         'total_likes_count': interacciones_list[0],

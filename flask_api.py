@@ -5,10 +5,7 @@ from flask_pymongo import PyMongo
 from pymongo import collection
 from flask_celery import make_celery
 import config
-import scraper
-import os
-import random
-import time
+import scraper 
 from datetime import datetime
 import pandas as pd
 from bson.objectid import ObjectId 
@@ -36,20 +33,6 @@ def not_found(error=None):
     response.status_code = 404
     return response
 
-# Lista de scrapes ordenados por fecha
-@flask_app.route('/scraped-profiles', methods=['GET'])
-def get_scraped_profiles():
-    collection = mongo.db.scraped_profiles
-    page = int(request.args.get('page', 1))
-    page_size = int(request.args.get('pageSize', 20))
-    offset = (page-1) * page_size
-    total = collection.count_documents({})
-    users = collection.find({}).sort('_id', -1).skip(offset).limit(page_size)
-    res = {'rows': list(users), 'count': total}
-    jsonRes = parse(res)
-    return Response(jsonRes, mimetype='application/json')
-
-
 #lista de usuarios buscados, ordenados por fecha
 @flask_app.route('/searched-profiles', methods=['GET'])
 def get_searched_profiles():
@@ -58,7 +41,7 @@ def get_searched_profiles():
     page_size = int(request.args.get('pageSize', 20))
     offset = (page-1) * page_size
     total = collection.count_documents({})
-    users = collection.find({}).sort('_id', -1).skip(offset).limit(page_size)
+    users = collection.find({'total_engagement': {'$ne': -1 } } ).sort('_id', -1).skip(offset).limit(page_size)
     res = {'rows': list(users), 'count': total}
     jsonRes = parse(res)
     return Response(jsonRes, mimetype='application/json')
@@ -81,6 +64,19 @@ def get_search_info():
     else:
         engagements = users.find(query).skip(offset).limit(page_size)
     res = {'rows': list(engagements), 'count': total}
+    jsonRes = parse(res)
+    return Response(jsonRes, mimetype='application/json')
+
+# Lista de scrapes ordenados por fecha
+@flask_app.route('/scraped-profiles', methods=['GET'])
+def get_scraped_profiles():
+    collection = mongo.db.scraped_profiles
+    page = int(request.args.get('page', 1))
+    page_size = int(request.args.get('pageSize', 20))
+    offset = (page-1) * page_size
+    total = collection.count_documents({})
+    users = collection.find({}).sort('_id', -1).skip(offset).limit(page_size)
+    res = {'rows': list(users), 'count': total}
     jsonRes = parse(res)
     return Response(jsonRes, mimetype='application/json')
 
@@ -201,14 +197,11 @@ def export_engagements_csv():
     users = mongo.db.user_engagement
     user_id = request.args.get('userId')
     timestamp = int(request.args.get('timestamp')) / 1000.0
-
     parsed_date = datetime.utcfromtimestamp(timestamp)
     cursor = users.find({'profile_id': user_id, 'date': parsed_date})
-
     df = pd.DataFrame(list(cursor))
     del df['_id']
     del df['profile_id']
-
     resp = make_response(df.to_csv())
     resp.headers["Content-Disposition"] = "attachment; filename=user_engagement.csv"
     resp.headers["Content-Type"] = "text/csv"
@@ -221,7 +214,6 @@ def export_posts_csv():
     username = request.args.get('username')
     profile_id = request.args.get('profileId')
     timestamp = int(request.args.get('timestamp')) / 1000.0
-
     parsed_date = datetime.utcfromtimestamp(timestamp)
     query = {
         'profile_id': profile_id,
