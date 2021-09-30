@@ -1,3 +1,4 @@
+from hashlib import new
 from igramscraper.instagram import Instagram
 from time import sleep
 from collections import Counter
@@ -15,6 +16,25 @@ import concurrent.futures
 
 EMAIL_ADDRESS = 'platanitomaduro42@gmail.com'
 EMAIL_PASSWORD = 'platanito42' 
+
+#---funcion para obtener cuentas desde archivo .json
+def getAccounts():
+    accounts = []
+    with open('accounts.json') as file:
+        data = json.load(file)
+    for account in data['accounts']: 
+        accounts.append(account) 
+    return accounts
+
+#--funcion para obtener random cuenta
+def newAccount(username, accounts):
+    flag=0 
+    while flag==0:
+        newaccount = random.choice(accounts) 
+        if newaccount['username']!=username:
+            username=newaccount['username']
+            flag=1  
+    return newaccount   
 
 #---------funciones para obtener proxies para su rotacion durante el scrape----------#
 #scrape para obtener proxies gratis actualizados
@@ -203,9 +223,7 @@ def scrape_user(username, email, scraping_user, scraping_pass):
                 post_info['commenters'] = unique_commenters
 
             result.append(post_info)
-
-            # Guardar o actualizar el post en la BD
-            # mongo.update_one('posts', post.identifier, post_info)
+            # Guardar el post en la BD 
             db.posts.insert_one(post_info)
         except Exception as e:
             print('Ocurrio una excepcion durante el scrape:', e)
@@ -260,7 +278,7 @@ def calculate_user_engagement(posts, account, start_time, instagram, proxylist):
     db.user_engagement.insert_many(stats)
 
 #-----funciones de micro-influencer finder-----
-def interacciones(followers, instagram, account, proxylist):
+def interacciones(followers, instagram, account, proxylist, scraping_user, instaAccounts):
     likes= comments = engagement= 0
     last_post = []
     for i in range(4):
@@ -268,9 +286,15 @@ def interacciones(followers, instagram, account, proxylist):
             last_post = instagram.get_medias_by_user_id(account.identifier, 1)
         except Exception as e:
             print('error: '+str(e))
-            if i < 4:
+            if i < 2:
                 instagram.set_proxies(newproxy(proxylist))
-                print('Intentando obtener posts nuevamente...') 
+                print('Intentando obtener posts nuevamente, rotando proxies...') 
+            if i < 3:
+                newScrapingAccount=newAccount(scraping_user, instaAccounts)
+                instagram.set_proxies(newproxy(proxylist))
+                instagram.with_credentials(newScrapingAccount['username'], newScrapingAccount['password'])
+                instagram.login()
+                print('Intentando obtener cuenta nuevamente, rotando cuentas...')
             else:
                 print('4 intentos fallidos al obtener posts')
                 return[likes,comments,engagement] 
@@ -293,12 +317,15 @@ def find_user(userSearch):
     #print(len(proxylist))
     with concurrent.futures.ThreadPoolExecutor() as executor:
         executor.map(extract, proxylist)
+    instaAccounts = getAccounts()
     insta = Instagram()
     insta.set_proxies(newproxy(proxylist))
+    scraping_user = 'prueba.ejemplo20'
+    scraping_pass = 'nosoyunbot'
     print('\n------iniciando buscador: inicio de sesion------\n') 
     #Hacer login
     try: 
-        insta.with_credentials('prueba.ejemplo20', 'nosoyunbot')
+        insta.with_credentials(scraping_user, scraping_pass)
         insta.login()
     except Exception as e:  
         send_email(userSearch, 'pdespejo18@gmail.com', False)
@@ -343,9 +370,15 @@ def find_user(userSearch):
                     user = insta.get_account(follower.username) 
                 except Exception as e:
                     print('error: '+str(e))
-                    if i < 4:
+                    if i < 2:
                         insta.set_proxies(newproxy(proxylist))
-                        print('Intentando obtener posts nuevamente...') 
+                        print('Intentando obtener cuenta nuevamente, rotando proxies...') 
+                    if i < 3:
+                        newScrapingAccount=newAccount(scraping_user, instaAccounts)
+                        insta.set_proxies(newproxy(proxylist))
+                        insta.with_credentials(newScrapingAccount['username'], newScrapingAccount['password'])
+                        insta.login()
+                        print('Intentando obtener cuenta nuevamente, rotando cuentas...') 
                     else:
                         print('4 intentos fallidos al obtener posts')
                         send_email(userSearch, 'pdespejo18@gmail.com', False)
@@ -370,7 +403,7 @@ def find_user(userSearch):
         username=user.username
         for x in col.find({'scraped_date': start_time, 'username': username}): 
             insta.set_proxies(newproxy(proxylist))
-            interacciones_follower = interacciones(x['follower_count'], insta, user, proxylist)
+            interacciones_follower = interacciones(x['follower_count'], insta, user, proxylist, scraping_user, instaAccounts)
             db.followers.update_one({
                 'scraped_date': start_time, 
                 'username': username}, {'$set': {'total_engagement': interacciones_follower[2]}})
@@ -378,7 +411,7 @@ def find_user(userSearch):
     #guardar interacciones del usuario buscado 
     print('---finalizando busqueda---')
     insta.set_proxies(newproxy(proxylist))
-    interacciones_list= interacciones(account_followers, insta, account, proxylist) 
+    interacciones_list= interacciones(account_followers, insta, account, proxylist, scraping_user, instaAccounts) 
     db.searched_profile.update_one({'_id': inserted_id}, {'$set': { 
         'total_likes_count': interacciones_list[0],
         'total_comments_count':interacciones_list[1],
