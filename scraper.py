@@ -320,15 +320,17 @@ def find_user(userSearch):
     instaAccounts = getAccounts()
     insta = Instagram()
     insta.set_proxies(newproxy(proxylist))
-    scraping_user = 'prueba.ejemplo20'
-    scraping_pass = 'nosoyunbot'
+    scraping_user = ' ' 
+    newScrapingAccount=newAccount(scraping_user, instaAccounts)
+    scraping_user = newScrapingAccount['username']
+    scraping_pass = newScrapingAccount['password']
     print('\n------iniciando buscador: inicio de sesion------\n') 
     #Hacer login
     try: 
         insta.with_credentials(scraping_user, scraping_pass)
         insta.login()
     except Exception as e:  
-        send_email(userSearch, 'pdespejo18@gmail.com', False)
+        send_email(userSearch, 'team@lccopen.tech', False)
         return 'Error al hacer login: credenciales no validas'+str(e)
 
     print('\n ---getting account--- \n')
@@ -336,7 +338,7 @@ def find_user(userSearch):
         insta.set_proxies(newproxy(proxylist))
         account = insta.get_account(userSearch)
     except Exception as e:
-        send_email(userSearch, 'pdespejo18@gmail.com', False)
+        send_email(userSearch, 'team@lccopen.tech', False)
         return 'Error al obtener la cuenta\n'+str(e) 
 
     insta.set_proxies(newproxy(proxylist))
@@ -381,7 +383,7 @@ def find_user(userSearch):
                         print('Intentando obtener cuenta nuevamente, rotando cuentas...') 
                     else:
                         print('4 intentos fallidos al obtener posts')
-                        send_email(userSearch, 'pdespejo18@gmail.com', False)
+                        send_email(userSearch, 'team@lccopen.tech', False)
                         return 'error getting account'
                 else:
                     break
@@ -418,7 +420,7 @@ def find_user(userSearch):
         'total_engagement': interacciones_list[2],
         'completed': True
     }})
-    send_email(userSearch, 'pdespejo18@gmail.com', True)
+    send_email(userSearch, 'team@lccopen.tech', True)
 
 
 if __name__ == '__main__':
