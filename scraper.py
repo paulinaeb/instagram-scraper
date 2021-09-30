@@ -226,9 +226,9 @@ def scrape_user(username, email, scraping_user, scraping_pass):
     # Calcular las estadisticas de engagement
     if len(result) > 0:
         calculate_user_engagement(result, account, start_time, email, instagram, proxylist)
+    send_email(account.username, email, True)
 
-
-def calculate_user_engagement(posts, account, start_time, email, instagram, proxylist):
+def calculate_user_engagement(posts, account, start_time, instagram, proxylist):
     from flask_api import mongo
     db = mongo.db
     # Se reciben todos los posts del perfil scrapeado, ya sea porque se haya obtenido por la API o de la BD
@@ -258,11 +258,9 @@ def calculate_user_engagement(posts, account, start_time, email, instagram, prox
     } for user, likes in likes_counter.most_common()]
     instagram.set_proxies(newproxy(proxylist))
     db.user_engagement.insert_many(stats)
-    send_email(account.username, email, True)
-
 
 #-----funciones de micro-influencer finder-----
-def interacciones(followers, instagram, account):
+def interacciones(followers, instagram, account, proxylist):
     likes= comments = engagement= 0
     last_post = []
     for i in range(4):
@@ -271,6 +269,7 @@ def interacciones(followers, instagram, account):
         except Exception as e:
             print('error: '+str(e))
             if i < 4:
+                instagram.set_proxies(newproxy(proxylist))
                 print('Intentando obtener posts nuevamente...') 
             else:
                 print('4 intentos fallidos al obtener posts')
@@ -278,7 +277,9 @@ def interacciones(followers, instagram, account):
         else:
             break
     if len(last_post)>0 and followers>0:
+        instagram.set_proxies(newproxy(proxylist))
         likes= last_post[0].likes_count
+        instagram.set_proxies(newproxy(proxylist))
         comments = last_post[0].comments_count   
         engagement = ((likes + comments)/followers)*100 
     return[likes,comments,engagement]    
@@ -297,17 +298,21 @@ def find_user(userSearch):
     print('\n------iniciando buscador: inicio de sesion------\n') 
     #Hacer login
     try: 
-        insta.with_credentials('itranslate.pzo', 'upata*123')
+        insta.with_credentials('prueba.ejemplo20', 'nosoyunbot')
         insta.login()
     except Exception as e:  
+        send_email(userSearch, 'pdespejo18@gmail.com', False)
         return 'Error al hacer login: credenciales no validas'+str(e)
 
     print('\n ---getting account--- \n')
     try:
+        insta.set_proxies(newproxy(proxylist))
         account = insta.get_account(userSearch)
     except Exception as e:
+        send_email(userSearch, 'pdespejo18@gmail.com', False)
         return 'Error al obtener la cuenta\n'+str(e) 
- 
+
+    insta.set_proxies(newproxy(proxylist))
     account_followers = account.followed_by_count 
     account_following = account.follows_count 
     id=account.identifier
@@ -333,8 +338,23 @@ def find_user(userSearch):
         insta.set_proxies(newproxy(proxylist))
         if follower.is_private is False:  
             insta.set_proxies(newproxy(proxylist))
-            user = insta.get_account(follower.username) 
-            username=user.username   
+            for i in range(4):
+                try:
+                    user = insta.get_account(follower.username) 
+                except Exception as e:
+                    print('error: '+str(e))
+                    if i < 4:
+                        insta.set_proxies(newproxy(proxylist))
+                        print('Intentando obtener posts nuevamente...') 
+                    else:
+                        print('4 intentos fallidos al obtener posts')
+                        send_email(userSearch, 'pdespejo18@gmail.com', False)
+                        return 'error getting account'
+                else:
+                    break
+            insta.set_proxies(newproxy(proxylist))
+            username=user.username
+            insta.set_proxies(newproxy(proxylist))   
             follower_count= user.followed_by_count 
             user_info = {}
             user_info['username']= username
@@ -350,7 +370,7 @@ def find_user(userSearch):
         username=user.username
         for x in col.find({'scraped_date': start_time, 'username': username}): 
             insta.set_proxies(newproxy(proxylist))
-            interacciones_follower = interacciones(x['follower_count'], insta, user)
+            interacciones_follower = interacciones(x['follower_count'], insta, user, proxylist)
             db.followers.update_one({
                 'scraped_date': start_time, 
                 'username': username}, {'$set': {'total_engagement': interacciones_follower[2]}})
@@ -358,13 +378,14 @@ def find_user(userSearch):
     #guardar interacciones del usuario buscado 
     print('---finalizando busqueda---')
     insta.set_proxies(newproxy(proxylist))
-    interacciones_list= interacciones(account_followers, insta, account) 
+    interacciones_list= interacciones(account_followers, insta, account, proxylist) 
     db.searched_profile.update_one({'_id': inserted_id}, {'$set': { 
         'total_likes_count': interacciones_list[0],
         'total_comments_count':interacciones_list[1],
         'total_engagement': interacciones_list[2],
         'completed': True
     }})
+    send_email(userSearch, 'pdespejo18@gmail.com', True)
 
 
 if __name__ == '__main__':

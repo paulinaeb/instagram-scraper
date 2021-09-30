@@ -67,6 +67,17 @@ def get_search_info():
     jsonRes = parse(res)
     return Response(jsonRes, mimetype='application/json')
 
+@flask_app.route('/all-search-info', methods=['GET'])
+def get_search_info_complete():
+    users= mongo.db.followers  
+    timestamp = int(request.args.get('timestamp')) / 1000.0 
+    parsed_date = datetime.utcfromtimestamp(timestamp) 
+    query = {'scraped_date': parsed_date} 
+    engagements = users.find(query) 
+    res = {'rows': list(engagements)}
+    jsonRes = parse(res)
+    return Response(jsonRes, mimetype='application/json')
+
 # Lista de scrapes ordenados por fecha
 @flask_app.route('/scraped-profiles', methods=['GET'])
 def get_scraped_profiles():
@@ -171,8 +182,8 @@ def start_scraper():
         return Response(parse({'message': 'missing params'}),  status=400, mimetype='application/json')
 
     if not scraping_user or not scraping_pass:
-        scraping_user = 'itranslate.pzo'
-        scraping_pass = 'upata*123'
+        scraping_user = 'prueba.ejemplo20'
+        scraping_pass = 'nosoyunbot'
 
     scrape_user.delay(username, email, scraping_user, scraping_pass)
     return Response(parse({'message': f'Procesando solicitud para: {username}'}), status=202, mimetype='application/json')    
