@@ -292,12 +292,13 @@ def interacciones(followers, instagram, account, proxylist, scraping_user, insta
             if i < 3:
                 newScrapingAccount=newAccount(scraping_user, instaAccounts)
                 instagram.set_proxies(newproxy(proxylist))
-                instagram.with_credentials(newScrapingAccount['username'], newScrapingAccount['password'])
+                scraping_user = newScrapingAccount['username']
+                instagram.with_credentials(scraping_user, newScrapingAccount['password'])
                 instagram.login()
                 print('Intentando obtener cuenta nuevamente, rotando cuentas...')
             else:
                 print('4 intentos fallidos al obtener posts')
-                return[likes,comments,engagement] 
+                return[likes,comments,engagement, scraping_user] 
         else:
             break
     if len(last_post)>0 and followers>0:
@@ -306,7 +307,7 @@ def interacciones(followers, instagram, account, proxylist, scraping_user, insta
         instagram.set_proxies(newproxy(proxylist))
         comments = last_post[0].comments_count   
         engagement = ((likes + comments)/followers)*100 
-    return[likes,comments,engagement]    
+    return[likes,comments,engagement, scraping_user]    
 
 
 def find_user(userSearch):
@@ -378,7 +379,8 @@ def find_user(userSearch):
                     if i < 3:
                         newScrapingAccount=newAccount(scraping_user, instaAccounts)
                         insta.set_proxies(newproxy(proxylist))
-                        insta.with_credentials(newScrapingAccount['username'], newScrapingAccount['password'])
+                        scraping_user = newScrapingAccount['username']
+                        insta.with_credentials(scraping_user, newScrapingAccount['password'])
                         insta.login()
                         print('Intentando obtener cuenta nuevamente, rotando cuentas...') 
                     else:
@@ -406,6 +408,7 @@ def find_user(userSearch):
         for x in col.find({'scraped_date': start_time, 'username': username}): 
             insta.set_proxies(newproxy(proxylist))
             interacciones_follower = interacciones(x['follower_count'], insta, user, proxylist, scraping_user, instaAccounts)
+            scraping_user = interacciones_follower[3]
             db.followers.update_one({
                 'scraped_date': start_time, 
                 'username': username}, {'$set': {'total_engagement': interacciones_follower[2]}})
@@ -414,6 +417,7 @@ def find_user(userSearch):
     print('---finalizando busqueda---')
     insta.set_proxies(newproxy(proxylist))
     interacciones_list= interacciones(account_followers, insta, account, proxylist, scraping_user, instaAccounts) 
+    scraping_user = interacciones_follower[3]
     db.searched_profile.update_one({'_id': inserted_id}, {'$set': { 
         'total_likes_count': interacciones_list[0],
         'total_comments_count':interacciones_list[1],
